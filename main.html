@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word List Flashcards</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f6f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #controls {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        #loadButton {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #loadButton:hover {
+            background-color: #0056b3;
+        }
+        #container {
+            display: flex;
+            gap: 30px;
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        #word-list {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #word-list h2 {
+            margin-top: 0;
+            color: #333;
+            text-align: center;
+        }
+        .word-item {
+            padding: 14px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+        }
+        .word-item:hover {
+            background: #e9ecef;
+        }
+        .word-item.active {
+            background: #d4edda;
+            font-weight: bold;
+            border: 2px solid #28a745;
+        }
+        .status {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .known { color: #28a745; }
+        .unknown { color: #dc3545; }
+
+        #flashcard-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #flashcard-container {
+            perspective: 1000px;
+            margin-bottom: 30px;
+        }
+        #flashcard {
+            width: 400px;
+            height: 240px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            border-radius: 15px;
+        }
+        #flashcard.flipped {
+            transform: rotateY(180deg);
+        }
+        .side {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            border-radius: 15px;
+            font-size: 28px;
+            text-align: center;
+        }
+        #front {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: bold;
+        }
+        #back {
+            background: #fff8e1;
+            color: #333;
+            transform: rotateY(180deg);
+        }
+        .buttons {
+            display: flex;
+            gap: 20px;
+        }
+        button {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 17px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-know {
+            background: #28a745;
+            color: white;
+        }
+        .btn-know:hover { background: #218838; }
+        .btn-dont {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-dont:hover { background: #c82333; }
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <input type="file" id="fileInput" accept=".csv">
+        <button id="loadButton">Load CSV</button>
+    </div>
+
+    <div id="container">
+        <div id="word-list">
+            <h2>Words to Learn</h2>
+            <div id="list">Load a CSV file to begin</div>
+        </div>
+
+        <div id="flashcard-area">
+            <div id="flashcard-container">
+                <div id="flashcard" onclick="flipCard()">
+                    <div id="front" class="side">Click a word from the list to start</div>
+                    <div id="back" class="side"></div>
+                </div>
+            </div>
+            <div class="buttons">
+                <button class="btn-dont" onclick="event.stopPropagation(); mark(false)">Didn't Know ✗</button>
+                <button class="btn-know" onclick="event.stopPropagation(); mark(true)">I Knew It ✓</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let words = [];
+    let currentWord = null;
+
+    const fileInput = document.getElementById('fileInput');
+    const loadButton = document.getElementById('loadButton');
+    const listDiv = document.getElementById('list');
+    const front = document.getElementById('front');
+    const back = document.getElementById('back');
+    const flashcard = document.getElementById('flashcard');
+
+    loadButton.addEventListener('click', () => {
+        const file = fileInput.files[0];
+        if (!file) {
+            alert('Please select a CSV file first.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            words = text.split('\n')
+                .map(line => line.trim())
+                .filter(line => line && line.includes(','))
+                .map(line => {
+                    const parts = line.split(',');
+                    const word = parts.shift().trim();
+                    const meaning = parts.join(',').trim();
+                    return { word, meaning, status: null }; // null = not tested, 'known', 'unknown'
+                });
+
+            currentWord = null;
+            renderList();
+            if (words.length > 0) {
+                selectWord(words[0]); // auto-select first word
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    function renderList() {
+        listDiv.innerHTML = '';
+        if (words.length === 0) {
+            listDiv.innerHTML = '<p style="text-align:center; color:#666;">No words loaded yet.</p>';
+            return;
+        }
+
+        words.forEach((item) => {
+            const div = document.createElement('div');
+            div.className = 'word-item';
+            if (item === currentWord) div.classList.add('active');
+
+            const icon = item.status === 'known' ? '✓' : item.status === 'unknown' ? '✗' : '';
+            const iconClass = item.status === 'known' ? 'known' : item.status === 'unknown' ? 'unknown' : '';
+
+            div.innerHTML = `
+                <span class="status ${iconClass}">${icon}</span>
+                <span>${item.word}</span>
+            `;
+            div.onclick = () => selectWord(item);
+            listDiv.appendChild(div);
+        });
+    }
+
+    function selectWord(wordObj) {
+        currentWord = wordObj;
+        front.textContent = wordObj.word;
+        back.textContent = wordObj.meaning;
+        flashcard.classList.remove('flipped');
+        renderList();
+    }
+
+    function flipCard() {
+        if (!currentWord) return;
+        flashcard.classList.toggle('flipped');
+    }
+
+    function mark(knewIt) {
+        if (!currentWord) return;
+        currentWord.status = knewIt ? 'known' : 'unknown';
+        renderList();
+
+        // Auto flip back to front after marking
+        setTimeout(() => {
+            flashcard.classList.remove('flipped');
+        }, 500);
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (!currentWord) return;
+        if (e.code === 'Space') {
+            e.preventDefault();
+            flipCard();
+        } else if (e.code === 'Enter' && flashcard.classList.contains('flipped')) {
+            mark(true);
+        } else if (e.code === 'ArrowRight' && flashcard.classList.contains('flipped')) {
+            mark(false);
+        }
+    });
+</script>
+
+</body>
+</html>
